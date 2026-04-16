@@ -251,5 +251,3 @@ Proyek ini menggunakan lisensi [MIT](LICENSE). Bebas digunakan dan dimodifikasi 
 Proyek mata kuliah **Pervasive Computing** — Teknik Informatika
 
 ---
-
-*Sistem ini adalah bukti bahwa IoT sederhana bisa menyelamatkan nyawa. 🌊*
