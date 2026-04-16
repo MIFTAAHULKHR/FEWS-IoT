@@ -1,0 +1,19 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Arduino IDE
+build/
+
+# Credentials — JANGAN PERNAH COMMIT!
+src/config.h
+*.env
+secrets.h
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
