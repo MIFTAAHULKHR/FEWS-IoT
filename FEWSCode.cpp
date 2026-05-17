@@ -9,7 +9,7 @@ namespace Config {
   const char* WIFI_PASSWORD    = "PasswordWiFi";   
   const int   WIFI_TIMEOUT_MS  = 15000;
 
-  const char* BOT_TOKEN = "8317511624:AAEnJB4f_-dwB9O8tsP4SEtKRD8ZUHkbyIM"; 
+  const char* BOT_TOKEN = "yourbottoken"; 
   const String CHAT_ID  = "yourchatid";  
 
   const unsigned long INTERVAL_BACA_SENSOR = 500;
