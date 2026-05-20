@@ -1,194 +1,203 @@
+Tentu, ini adalah versi terjemahan lengkap dari file `README.md` Anda ke dalam bahasa Inggris yang sudah disesuaikan agar terlihat profesional untuk repositori GitHub:
+
+```markdown
 # 🌊 FEWS — Flood Early Warning System (Context-Aware)
 
-> FEWS-IoT adalah prototipe **Flood Early Warning System** (Sistem Peringatan Dini Banjir) yang dirancang untuk memantau ketinggian air dan intensitas hujan secara real-time. Sistem ini memadukan sensor ultrasonik, sensor hujan analog, dan modul RTC untuk menghasilkan peringatan yang cerdas dan kontekstual.
+> FEWS-IoT is a **Flood Early Warning System** prototype designed to monitor water levels and rain intensity in real-time. This system integrates an ultrasonic sensor, an analog rain sensor, and an RTC module to generate smart and contextual alerts.
 
->  Notifikasi dikirimkan secara otomatis ke saluran **Telegram**, sehingga petugas atau warga dapat menerima peringatan tanpa harus memantau perangkat secara langsung.
-Proyek ini disimulasikan menggunakan platform **[Wokwi](https://wokwi.com/projects/461632741819653121)**.
-
-### 🖼️ Desain Rangkaian Virtual
-![Desain Rangkaian Virtual FEWS](pict/VirtualDesign.png)
-
-### 📊 Hasil Pengujian Sistem
-![Monitoring Real-Time via Serial Monitor dan Telegram Bot](pict/image.jpeg)
-
-### Demo Pengujian Alat
-![Demonstrasi Pengujian Alat IoT](pict/Demo.png))
+> Notifications are automatically sent to a **Telegram** channel, allowing officers or residents to receive warnings without having to monitor the device directly.
+This project is simulated using the **[Wokwi](https://wokwi.com/projects/461632741819653121)** platform.
 
 ---
-## ✨ Fitur Utama
 
-| Fitur | Deskripsi |
+### 🖼️ Virtual Circuit Design
+![FEWS Virtual Circuit Design](pict/VirtualDesign.png)
+
+### 📊 System Testing Results
+![Real-Time Monitoring via Serial Monitor and Telegram Bot](pict/image.jpeg)
+
+### 🎬 Device Testing Demo
+![IoT Device Testing Demonstration](pict/Demo.png)
+
+---
+## ✨ Key Features
+
+| Feature | Description |
 |---|---|
-| 🔴 **Indikator LED 3-Warna** | Hijau / Kuning / Merah sesuai level bahaya |
-| 🔔 **Buzzer Alarm** | Pola bunyi berbeda untuk tiap level, lebih keras di malam hari |
-| 📱 **Notifikasi Telegram** | Broadcast otomatis dengan interval adaptif |
-| 🌙 **Mode Siang/Malam** | Respons lebih agresif pada malam hari via RTC DS1307 |
-| ⚡ **Non-Blocking Timer** | Menggunakan `millis()` agar sistem selalu responsif |
-| 🌧️ **Klasifikasi Intensitas Hujan** | Cerah / Hujan Sedang / Hujan Deras |
-| 💬 **Perintah `/status`** | Cek kondisi real-time kapan saja lewat Telegram |
+| 🔴 **3-Color LED Indicator** | Green / Yellow / Red according to the danger level |
+| 🔔 **Buzzer Alarm** | Different sound patterns for each level, louder at night |
+| 📱 **Telegram Notifications** | Automatic broadcast with adaptive intervals |
+| 🌙 **Day/Night Mode** | More aggressive response at night via RTC DS1307 |
+| ⚡ **Non-Blocking Timer** | Uses `millis()` to keep the system always responsive |
+| 🌧️ **Rain Intensity Classification** | Clear / Moderate Rain / Heavy Rain |
+| 💬 **`/status` Command** | Check real-time conditions anytime via Telegram |
 
 ---
 
-## 🚦 Logika Status Bahaya
+## 🚦 Danger Status Logic
 
-Sistem membaca jarak dari sensor ultrasonik sebagai representasi **ketinggian air** (semakin kecil jarak = semakin tinggi air).
+The system reads the distance from the ultrasonic sensor as a representation of **water level** (smaller distance = higher water).
 
-| Status | Jarak Sensor | LED | Buzzer | Interval Telegram |
+| Status | Sensor Distance | LED | Buzzer | Telegram Interval |
 |---|---|---|---|---|
-| 🟢 **AMAN** | > 100 cm | Hijau | Mati | Tidak dikirim |
-| 🟡 **WASPADA** | 50 – 100 cm | Kuning | Mati | Setiap 5 menit |
-| 🔴 **SIAGA 1** | 20 – 49 cm | Merah | Bip intermiten | Malam: 2 mnt / Siang: 5 mnt |
-| 🆘 **DARURAT** | < 20 cm | Merah | Sirine terus-menerus | Malam: 1 mnt / Siang: 2 mnt |
+| 🟢 **SAFE** | > 100 cm | Green | Off | Not sent |
+| 🟡 **WARNING** | 50 – 100 cm | Yellow | Off | Every 5 minutes |
+| 🔴 **ALERT 1** | 20 – 49 cm | Red | Intermittent beep | Night: 2 mins / Day: 5 mins |
+| 🆘 **EMERGENCY** | < 20 cm | Red | Continuous siren | Night: 1 min / Day: 2 mins |
 
 ---
 
 ## 🔧 Hardware
 
-### Komponen
+### Components
 
-| Komponen | Spesifikasi | 
+| Component | Specification | 
 |----------|-------------|
-| ESP32 DevKit V1 | Dual-core 240MHz, WiFi bawaan | 
-| HC-SR04 + Waterproof Case | Range 2–400cm, ±3mm akurasi | 
-| YL-83 Rain Sensor | Output analog + digital | 
+| ESP32 DevKit V1 | Dual-core 240MHz, built-in WiFi | 
+| HC-SR04 + Waterproof Case | Range 2–400cm, ±3mm accuracy | 
+| YL-83 Rain Sensor | Analog + digital output | 
 | Active Buzzer 5V | 85dB | 
-| LED Traffic Light Module | Merah / Kuning / Hijau | 
-| Power Supply 5V 2A | Adaptor DC |
+| LED Traffic Light Module | Red / Yellow / Green | 
+| Power Supply 5V 2A | DC Adapter |
 | Waterproof Box | IP65 | 
-| Kabel, Breadboard, Resistor | — | 
+| Cables, Breadboard, Resistors | — | 
 
 ---
 
-## 🚀 Cara Menjalankan
+## 🚀 How to Run
 
-### Simulasi di Wokwi (Direkomendasikan)
+### Simulation on Wokwi (Recommended)
 
-1. Buka tautan proyek: [https://wokwi.com/projects/461632741819653121](https://wokwi.com/projects/461632741819653121)
-2. Masukkan **Token Bot** dan **Chat ID** Telegram Anda di `sketch.ino` (lihat bagian [Konfigurasi Telegram Bot](#-konfigurasi-telegram-bot)).
-3. Klik tombol **▶ Play** untuk memulai simulasi.
-4. Putar potensiometer untuk mengatur intensitas hujan.
-5. Klik sensor HC-SR04 dan ubah nilai `distance` untuk mensimulasikan ketinggian air.
+1. Open the project link: [https://wokwi.com/projects/461632741819653121](https://wokwi.com/projects/461632741819653121)
+2. Enter your Telegram **Bot Token** and **Chat ID** in `sketch.ino` (see the [Telegram Bot Configuration](#-telegram-bot-configuration) section).
+3. Click the **▶ Play** button to start the simulation.
+4. Turn the potentiometer to adjust the rain intensity.
+5. Click the HC-SR04 sensor and change the `distance` value to simulate the water level.
 
-### Deploy ke Hardware Asli
+### Deploy to Real Hardware
 
-1. Install **Arduino IDE** dan tambahkan board **ESP32** melalui Board Manager.
-2. Install library yang dibutuhkan (lihat [`libraries.txt`](libraries.txt)):
+1. Install **Arduino IDE** and add the **ESP32** board via the Board Manager.
+2. Install the required libraries (see `libraries.txt`):
    - `RTClib`
    - `CTBot`
    - `ArduinoJson` (v6.21.5)
-3. Buka `sketch.ino`, isi kredensial WiFi dan Telegram.
-4. Upload ke board ESP32.
+3. Open `sketch.ino`, fill in your WiFi and Telegram credentials.
+4. Upload the code to the ESP32 board.
 
 ---
 
-## ⚙️ Konfigurasi Telegram Bot
+## ⚙️ Telegram Bot Configuration
 
-Edit bagian berikut di `sketch.ino`:
+Edit the following section in `sketch.ino`:
 
 ```cpp
-// Kredensial WiFi
-String ssid = "NAMA_WIFI_ANDA";
-String pass = "PASSWORD_WIFI_ANDA";
+// WiFi Credentials
+String ssid = "YOUR_WIFI_NAME";
+String pass = "YOUR_WIFI_PASSWORD";
 
 // Telegram Bot
-String token = "ISI_TOKEN_BOT_ANDA";
-const int64_t bot_id = ISI_CHAT_ID_ANDA;
+String token = "YOUR_BOT_TOKEN";
+const int64_t bot_id = YOUR_CHAT_ID;
+
 ```
 
-### Cara Mendapatkan Token Bot
+### How to Get a Bot Token
 
-1. Buka Telegram, cari **@BotFather**.
-2. Ketik `/newbot` dan ikuti instruksi.
-3. Salin token yang diberikan.
+1. Open Telegram, search for **@BotFather**.
+2. Type `/newbot` and follow the instructions.
+3. Copy the provided token.
 
-### Cara Mendapatkan Chat ID
+### How to Get a Chat ID
 
-1. Cari bot **@userinfobot** di Telegram.
-2. Ketik `/start` — bot akan membalas dengan **Chat ID** Anda.
+1. Search for the **@userinfobot** bot on Telegram.
+2. Type `/start` — the bot will reply with your **Chat ID**.
 
-> ⚠️ **Peringatan Keamanan:** Jangan mempublikasikan `token` dan `chat_id` Anda ke repositori publik. Gunakan file konfigurasi terpisah atau environment variable untuk deployment produksi.
+> ⚠️ **Security Warning:** Do not publish your `token` and `chat_id` to a public repository. Use a separate configuration file or environment variables for production deployment.
 
 ---
 
-## 📱 Perintah Telegram Bot
+## 📱 Telegram Bot Commands
 
-| Perintah | Fungsi |
-|----------|--------|
-| `/status` | Tampilkan status terkini (ketinggian air, hujan, waktu, level) |
+| Command | Function |
+| --- | --- |
+| `/status` | Display the current status (water level, rain, time, level) |
 
-### Contoh Respons `/status`
+### Example `/status` Response
 
 ```
-📊 Status Terkini FEWS
-📍 Ketinggian air : 75 cm dari sensor
-🌧️ Intensitas hujan: Sedang
-🕐 Waktu          : 14:32 WIB (Siang 06:00–22:00)
-📶 Status         : 🟡 WASPADA
+📊 Current FEWS Status
+📍 Water level : 75 cm from sensor
+🌧️ Rain intensity: Moderate
+🕐 Time          : 14:32 WIB (Daytime 06:00–22:00)
+📶 Status         : 🟡 WARNING
 
----
 ```
-## 📋 5 Skenario Pervasive
-
-Lihat detail di [`docs/SKENARIO.md`](docs/SKENARIO.md).
-
-| # | Skenario | Waktu | Kondisi |
-|---|----------|-------|---------|
-| 1 | Waspada Dini Siang | Siang | Hujan mulai deras, air naik |
-| 2 | Siaga 1 Siang | Siang | Air kritis + hujan deras |
-| 3 | **Siaga 1 Malam** ⭐ | Malam | Air kritis + warga tidur |
-| 4 | Kondisi Membaik | Kapan saja | Air surut, hujan berhenti |
-| 5 | Cek Status On-Demand | Kapan saja | `/status` via Telegram |
 
 ---
 
-## 🏗️ Arsitektur Sistem
+## 📋 5 Pervasive Scenarios
+
+See details in `docs/SKENARIO.md`.
+
+| # | Scenario | Time | Condition |
+| --- | --- | --- | --- |
+| 1 | Early Warning Day | Day | Rain gets heavy, water rises |
+| 2 | Alert 1 Day | Day | Critical water + heavy rain |
+| 3 | **Alert 1 Night** ⭐ | Night | Critical water + residents sleeping |
+| 4 | Condition Improves | Anytime | Water recedes, rain stops |
+| 5 | On-Demand Status Check | Anytime | `/status` via Telegram |
+
+---
+
+## 🏗️ System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      SENSOR LAYER                       │
 │   [HC-SR04]           [YL-83]          [NTP/WiFi]       │
-│  Ketinggian Air    Intensitas Hujan    Waktu Hari        │
+│  Water Level       Rain Intensity     Time of Day       │
 └──────────┬──────────────────┬──────────────┬────────────┘
            └──────────────────┴──────────────┘
                               │
-                    ┌─────────▼─────────┐
+                    ┌*********▼*********┐
                     │      ESP32        │
                     │   DevKit V1       │
                     │   Logic Engine    │
-                    └─────────┬─────────┘
+                    └*********┬*********┘
            ┌──────────────────┼──────────────────┐
            │                  │                  │
     ┌──────▼──────┐   ┌───────▼──────┐   ┌──────▼──────┐
     │  LOCAL OUT  │   │  CLOUD OUT   │   │  LOG DATA   │
     │ LED + Siren │   │ Telegram Bot │   │   SPIFFS    │
     └─────────────┘   └──────────────┘   └─────────────┘
+
 ```
 
 ---
 
-## 📊 Stack Teknologi
+## 📊 Technology Stack
 
-| Layer | Teknologi |
-|-------|-----------|
+| Layer | Technology |
+| --- | --- |
 | Hardware | ESP32 DevKit V1, HC-SR04, YL-83, Buzzer, LED |
 | Firmware | Arduino (C++) via PlatformIO |
-| Konektivitas | WiFi built-in ESP32 |
-| Sinkronisasi Waktu | NTP (`pool.ntp.org`) — gratis, tanpa modul tambahan |
-| Notifikasi | Telegram Bot API (gratis) |
-| Log Data | SPIFFS (internal flash ESP32) |
-| Dashboard Opsional | ThingSpeak / Blynk |
-| Simulasi | Wokwi |
+| Connectivity | Built-in ESP32 WiFi |
+| Time Synchronization | NTP (`pool.ntp.org`) — free, no extra module required |
+| Notifications | Telegram Bot API (free) |
+| Data Logging | SPIFFS (ESP32 internal flash) |
+| Optional Dashboard | ThingSpeak / Blynk |
+| Simulation | Wokwi |
 
 ---
 
-## 📄 Lisensi
+## 📄 License
 
-Proyek ini menggunakan lisensi [MIT](LICENSE). Bebas digunakan dan dimodifikasi untuk keperluan pendidikan.
-
----
-
-## 👥 Tim
-
-Proyek mata kuliah **Pervasive Computing** — Teknik Informatika
+This project is licensed under the MIT License. Free to use and modify for educational purposes.
 
 ---
+
+## 👥 Team
+
+Pervasive Computing Course Project — Informatics Engineering
+
+```
