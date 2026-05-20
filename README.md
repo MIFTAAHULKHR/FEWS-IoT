@@ -1,6 +1,3 @@
-Tentu, ini adalah versi terjemahan lengkap dari file `README.md` Anda ke dalam bahasa Inggris yang sudah disesuaikan agar terlihat profesional untuk repositori GitHub:
-
-```markdown
 # 🌊 FEWS — Flood Early Warning System (Context-Aware)
 
 > FEWS-IoT is a **Flood Early Warning System** prototype designed to monitor water levels and rain intensity in real-time. This system integrates an ultrasonic sensor, an analog rain sensor, and an RTC module to generate smart and contextual alerts.
