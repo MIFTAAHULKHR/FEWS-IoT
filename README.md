@@ -1,11 +1,9 @@
 # 🌊 FEWS — Flood Early Warning System (Context-Aware)
 
-> Sistem peringatan dini banjir berbasis IoT — mendeteksi ketinggian air, intensitas hujan, dan waktu hari untuk memberikan respons yang tepat dan adaptif.
+> FEWS-IoT adalah prototipe **Flood Early Warning System** (Sistem Peringatan Dini Banjir) yang dirancang untuk memantau ketinggian air dan intensitas hujan secara real-time. Sistem ini memadukan sensor ultrasonik, sensor hujan analog, dan modul RTC untuk menghasilkan peringatan yang cerdas dan kontekstual.
 
-[![Platform](https://img.shields.io/badge/platform-ESP32-blue)](https://www.espressif.com/en/products/socs/esp32)
-[![Framework](https://img.shields.io/badge/framework-Arduino-00979D)](https://www.arduino.cc/)
-[![Simulation](https://img.shields.io/badge/simulation-Wokwi-purple)](https://wokwi.com/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+>  Notifikasi dikirimkan secara otomatis ke saluran **Telegram**, sehingga petugas atau warga dapat menerima peringatan tanpa harus memantau perangkat secara langsung.
+Proyek ini disimulasikan menggunakan platform **[Wokwi](https://wokwi.com/projects/461632741819653121)**.
 
 ---
 
@@ -17,33 +15,10 @@ FEWS adalah sistem pervasive computing yang memadukan **3 sumber konteks** untuk
 |---|---------|--------|------|
 | 1 | Ketinggian Air | HC-SR04 Ultrasonik | Jarak permukaan air (cm) |
 | 2 | Intensitas Hujan | YL-83 / MH-RD | Nilai analog (0–4095) |
-| 3 | Waktu Hari | NTP via WiFi | Jam aktif vs jam tidur |
-
-Keunggulan utama: **sistem tahu bahwa malam hari warga sedang tidur**, sehingga respons (sirine, frekuensi notifikasi) disesuaikan agar lebih efektif.
+| 3 | Waktu Hari | NTP via WiFi | Waktu |
 
 ---
 
-## 🗂️ Struktur Repositori
-
-```
-fews-iot/
-├── src/
-│   └── main.cpp            # Firmware utama ESP32
-├── simulation/
-│   ├── diagram.json        # Skema rangkaian Wokwi
-│   └── wokwi.toml          # Konfigurasi simulasi
-├── docs/
-│   ├── ARSITEKTUR.md       # Diagram arsitektur sistem
-│   ├── SKENARIO.md         # 5 skenario pervasive
-│   ├── PENGUJIAN.md        # Log & hasil uji
-│   └── SETUP_TELEGRAM.md   # Panduan konfigurasi Telegram Bot
-├── platformio.ini          # Konfigurasi build PlatformIO
-├── .gitignore
-├── LICENSE
-└── README.md
-```
-
----
 
 ## ⚡ Level Status & Logika Adaptasi
 
