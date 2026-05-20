@@ -6,16 +6,17 @@
 Proyek ini disimulasikan menggunakan platform **[Wokwi](https://wokwi.com/projects/461632741819653121)**.
 
 ---
+## ✨ Fitur Utama
 
-## 📌 Deskripsi Proyek
-
-FEWS adalah sistem pervasive computing yang memadukan **3 sumber konteks** untuk menghasilkan peringatan banjir yang cerdas:
-
-| # | Konteks | Sensor | Data |
-|---|---------|--------|------|
-| 1 | Ketinggian Air | HC-SR04 Ultrasonik | Jarak permukaan air (cm) |
-| 2 | Intensitas Hujan | YL-83 / MH-RD | Nilai analog (0–4095) |
-| 3 | Waktu Hari | NTP via WiFi | Waktu |
+| Fitur | Deskripsi |
+|---|---|
+| 🔴 **Indikator LED 3-Warna** | Hijau / Kuning / Merah sesuai level bahaya |
+| 🔔 **Buzzer Alarm** | Pola bunyi berbeda untuk tiap level, lebih keras di malam hari |
+| 📱 **Notifikasi Telegram** | Broadcast otomatis dengan interval adaptif |
+| 🌙 **Mode Siang/Malam** | Respons lebih agresif pada malam hari via RTC DS1307 |
+| ⚡ **Non-Blocking Timer** | Menggunakan `millis()` agar sistem selalu responsif |
+| 🌧️ **Klasifikasi Intensitas Hujan** | Cerah / Hujan Sedang / Hujan Deras |
+| 💬 **Perintah `/status`** | Cek kondisi real-time kapan saja lewat Telegram |
 
 ---
 
