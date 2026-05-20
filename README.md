@@ -5,6 +5,8 @@
 >  Notifikasi dikirimkan secara otomatis ke saluran **Telegram**, sehingga petugas atau warga dapat menerima peringatan tanpa harus memantau perangkat secara langsung.
 Proyek ini disimulasikan menggunakan platform **[Wokwi](https://wokwi.com/projects/461632741819653121)**.
 
+**`pict/VirtualDesign.png`**
+**`pict/image.jpeg`**
 ---
 ## ✨ Fitur Utama
 
