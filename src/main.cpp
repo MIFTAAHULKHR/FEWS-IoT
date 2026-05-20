@@ -1,443 +1,429 @@
-/**
- * ============================================================
- *  FEWS — Flood Early Warning System (Context-Aware)
- *  Platform   : ESP32 DevKit V1
- *  Framework  : Arduino (PlatformIO / Arduino IDE)
- *  Author     : Tim Mahasiswa Teknik Informatika
- * ============================================================
- *
- *  3 Sumber Konteks:
- *    1. Ketinggian Air  → HC-SR04 Ultrasonik
- *    2. Intensitas Hujan → YL-83 / MH-RD
- *    3. Waktu Hari      → NTP via WiFi
- *
- *  Output:
- *    - LED Traffic Light (Hijau / Kuning / Merah)
- *    - Active Buzzer
- *    - Notifikasi Telegram Bot
- *    - Log SPIFFS
- * ============================================================
- */
-
-#include <Arduino.h>
+#include <Wire.h>
+#include <RTClib.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <HTTPClient.h>
-#include <time.h>
-#include <SPIFFS.h>
+#include <UniversalTelegramBot.h>
 
-// ── Konfigurasi WiFi & Telegram ───────────────────────────
-#define WIFI_SSID        "NAMA_WIFI_KAMU"
-#define WIFI_PASSWORD    "PASSWORD_WIFI"
-#define TELEGRAM_TOKEN   "TOKEN_BOT_TELEGRAM"
-#define TELEGRAM_CHAT_ID "CHAT_ID_KAMU"
+namespace Config {
+  const char* WIFI_SSID        = "NamaWiFi";      
+  const char* WIFI_PASSWORD    = "PasswordWiFi";   
+  const int   WIFI_TIMEOUT_MS  = 15000;
 
-// ── Pin Mapping ───────────────────────────────────────────
-// HC-SR04 (Ultrasonik)
-#define TRIG_PIN    12
-#define ECHO_PIN    14
+  const char* BOT_TOKEN = "yourbottoken"; 
+  const String CHAT_ID  = "yourchatid";  
 
-// YL-83 Rain Sensor
-#define RAIN_AO_PIN 34   // Analog Output
-#define RAIN_DO_PIN 27   // Digital Output (1 = tidak hujan, 0 = hujan)
+  const unsigned long INTERVAL_BACA_SENSOR = 500;
+  const unsigned long INTERVAL_SERIAL_LOG  = 1000;
+  const unsigned long INTERVAL_TELEGRAM    = 60000;
+  const unsigned long INTERVAL_CEK_WIFI    = 30000;
 
-// LED Traffic Light
-#define LED_GREEN   25
-#define LED_YELLOW  26
-#define LED_RED     33
 
-// Buzzer Aktif
-#define BUZZER_PIN  32
+  const float BATAS_BAHAYA  = 20.0;
+  const float BATAS_WASPADA = 50.0;
 
-// ── Threshold Ketinggian Air (jarak sensor ke permukaan air, cm) ──
-#define LEVEL_SAFE       100  // > 100cm  → AMAN
-#define LEVEL_WASPADA     50  // 50–100cm → WASPADA
-#define LEVEL_SIAGA1      20  // 20–50cm  → SIAGA 1
-                              // < 20cm   → DARURAT
+  const float        JARAK_MAX_CM       = 400.0;
+  const float        JARAK_MIN_CM       = 2.0;
+  const unsigned int TIMEOUT_ULTRASONIK = 30000;
+}
 
-// ── Threshold Sensor Hujan (nilai ADC, 0–4095) ───────────
-#define RAIN_LIGHT_THRESHOLD  3000  // > 3000  → tidak hujan
-#define RAIN_MED_THRESHOLD    2000  // 2000–3000 → hujan sedang
-                                    // < 2000  → hujan deras
 
-// ── NTP ──────────────────────────────────────────────────
-#define NTP_SERVER    "pool.ntp.org"
-#define TZ_OFFSET_WIB 7 * 3600   // UTC+7
+namespace Pin {
 
-// ── Interval (ms) ─────────────────────────────────────────
-#define LOOP_INTERVAL         2000   // baca sensor tiap 2 detik
-#define HEARTBEAT_INTERVAL  3600000  // heartbeat tiap 1 jam
-#define NOTIF_DARURAT_SIANG  120000  // notif darurat siang tiap 2 mnt
-#define NOTIF_DARURAT_MALAM   60000  // notif darurat malam tiap 1 mnt
-#define NOTIF_SIAGA1_INTERVAL 300000 // notif siaga 1 tiap 5 mnt
+  constexpr int TRIG       = 2;
+  constexpr int ECHO       = 15;
+  constexpr int HUJAN      = 34;
+  constexpr int LED_HIJAU  = 13;
+  constexpr int LED_KUNING = 12;
+  constexpr int LED_MERAH  = 14;
+  constexpr int BUZZER     = 26;
+}
 
-// ── Enum Status ───────────────────────────────────────────
-typedef enum {
-  STATUS_AMAN = 0,
-  STATUS_WASPADA,
-  STATUS_SIAGA1,
-  STATUS_DARURAT
-} FloodStatus;
+enum class StatusBanjir { AMAN, WASPADA, BAHAYA, SENSOR_ERROR };
 
-typedef enum {
-  RAIN_TIDAK = 0,
-  RAIN_RINGAN,
-  RAIN_SEDANG,
-  RAIN_DERAS
-} RainLevel;
 
-// ── Variabel Global ───────────────────────────────────────
-FloodStatus currentStatus    = STATUS_AMAN;
-FloodStatus previousStatus   = STATUS_AMAN;
-RainLevel   currentRain      = RAIN_TIDAK;
-float       waterDistanceCm  = 0;
-int         rainAnalog        = 0;
-bool        isNightTime       = false;
+struct DataSensor {
+  float        jarak       = -1.0;
+  int          persenHujan = 0;
+  StatusBanjir status      = StatusBanjir::SENSOR_ERROR;
+};
 
-unsigned long lastLoopTime      = 0;
-unsigned long lastNotifTime     = 0;
-unsigned long lastHeartbeatTime = 0;
+struct StatusSistem {
+  bool         wifiTerhubung  = false;
+  bool         rtcOK          = false;
+  bool         ultrasonikOK   = false;
+  StatusBanjir statusTerakhirTerkirim = StatusBanjir::AMAN;
+};
 
-// ── Forward Declarations ──────────────────────────────────
-float   readWaterLevel();
-RainLevel readRainSensor(int &analogVal);
-bool    checkNightTime();
-FloodStatus determineStatus(float dist, RainLevel rain);
-void    setLED(FloodStatus status);
-void    setBuzzer(FloodStatus status, bool night);
-void    sendTelegram(const String &msg);
-void    handleNotification(FloodStatus status, bool statusChanged, bool night);
-void    logToSPIFFS(const String &entry);
-void    handleTelegramCommand();
-String  buildStatusMessage();
 
-// ═══════════════════════════════════════════════════════════
-//  SETUP
-// ═══════════════════════════════════════════════════════════
+RTC_DS1307        rtc;
+WiFiClientSecure  clientSecure;
+UniversalTelegramBot bot(Config::BOT_TOKEN, clientSecure);
+
+DataSensor   sensor;
+StatusSistem sistem;
+
+unsigned long tBacaSensor = 0;
+unsigned long tSerialLog  = 0;
+unsigned long tTelegram   = 0;
+unsigned long tCekWifi    = 0;
+
+
+float bacaJarak() {
+  digitalWrite(Pin::TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(Pin::TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(Pin::TRIG, LOW);
+
+  long durasi = pulseIn(Pin::ECHO, HIGH, Config::TIMEOUT_ULTRASONIK);
+  if (durasi == 0) return -1.0;
+
+
+  float jarak = durasi * 0.034f / 2.0f;
+  if (jarak < Config::JARAK_MIN_CM || jarak > Config::JARAK_MAX_CM) return -1.0;
+  return jarak;
+}
+
+int bacaPersenHujan() {
+  int raw = analogRead(Pin::HUJAN);
+  return map(raw, 0, 4095, 100, 0);
+
+}
+
+StatusBanjir tentukanStatus(float jarak) {
+  if (jarak < 0)                       return StatusBanjir::SENSOR_ERROR;
+  if (jarak < Config::BATAS_BAHAYA)    return StatusBanjir::BAHAYA;
+  if (jarak < Config::BATAS_WASPADA)   return StatusBanjir::WASPADA;
+  return StatusBanjir::AMAN;
+}
+
+void bacaSemuaSensor() {
+  sensor.jarak        = bacaJarak();
+  sensor.persenHujan  = bacaPersenHujan();
+  sensor.status       = tentukanStatus(sensor.jarak);
+  sistem.ultrasonikOK = (sensor.jarak >= 0);
+}
+
+
+void setLED(bool hijau, bool kuning, bool merah) {
+  digitalWrite(Pin::LED_HIJAU,  hijau  ? HIGH : LOW);
+  digitalWrite(Pin::LED_KUNING, kuning ? HIGH : LOW);
+  digitalWrite(Pin::LED_MERAH,  merah  ? HIGH : LOW);
+}
+
+void updateAktuator() {
+  switch (sensor.status) {
+    case StatusBanjir::BAHAYA:
+      setLED(false, false, true);
+      digitalWrite(Pin::BUZZER, HIGH);
+      break;
+
+    case StatusBanjir::WASPADA:
+      setLED(false, true, false);
+      digitalWrite(Pin::BUZZER, LOW);
+      break;
+
+    case StatusBanjir::AMAN:
+      setLED(true, false, false);
+      digitalWrite(Pin::BUZZER, LOW);
+      break;
+
+    case StatusBanjir::SENSOR_ERROR:
+      digitalWrite(Pin::BUZZER, LOW);
+      break;
+
+  }
+}
+
+
+bool hubungkanWifi() {
+  if (WiFi.status() == WL_CONNECTED) return true;
+
+  Serial.printf("[WiFi] Menghubungkan ke: %s\n", Config::WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(Config::WIFI_SSID, Config::WIFI_PASSWORD);
+
+  unsigned long mulai = millis();
+  while (WiFi.status() != WL_CONNECTED) {
+    if (millis() - mulai > Config::WIFI_TIMEOUT_MS) {
+      Serial.println("[WiFi] GAGAL — Timeout.");
+      return false;
+    }
+    delay(300);
+    Serial.print('.');
+  }
+
+  Serial.printf("\n[WiFi] Terhubung! IP: %s\n", WiFi.localIP().toString().c_str());
+  return true;
+}
+
+void cekKoneksiWifi() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[WiFi] Koneksi terputus, mencoba ulang...");
+    sistem.wifiTerhubung = hubungkanWifi();
+  }
+}
+
+
+String statusKeString(StatusBanjir s) {
+  switch (s) {
+    case StatusBanjir::BAHAYA:       return "BAHAYA";
+    case StatusBanjir::WASPADA:      return "WASPADA";
+    case StatusBanjir::AMAN:         return "AMAN";
+    case StatusBanjir::SENSOR_ERROR: return "ERROR SENSOR";
+    default:                         return "TIDAK DIKETAHUI";
+  }
+}
+
+String statusKeEmoji(StatusBanjir s) {
+  switch (s) {
+    case StatusBanjir::BAHAYA:       return "🔴";
+    case StatusBanjir::WASPADA:      return "🟡";
+    case StatusBanjir::AMAN:         return "🟢";
+    case StatusBanjir::SENSOR_ERROR: return "⚠️";
+    default:                         return "❓";
+  }
+}
+
+String buatPesanTelegram() {
+  String jam = "--:--:--";
+  String tanggal = "----/--/--";
+
+  if (sistem.rtcOK) {
+    DateTime now = rtc.now();
+    char bufJam[9], bufTgl[11];
+    snprintf(bufJam, sizeof(bufJam), "%02d:%02d:%02d",
+             now.hour(), now.minute(), now.second());
+    snprintf(bufTgl, sizeof(bufTgl), "%04d/%02d/%02d",
+             now.year(), now.month(), now.day());
+    jam     = String(bufJam);
+    tanggal = String(bufTgl);
+  }
+
+  String emoji = statusKeEmoji(sensor.status);
+  String status = statusKeString(sensor.status);
+
+  String pesan = "🌊 *FEWS — Peringatan Banjir*\n";
+  pesan += "━━━━━━━━━━━━━━━━━━\n";
+  pesan += emoji + " *Status   :* " + status + "\n";
+
+  if (sensor.jarak >= 0) {
+    pesan += "📏 *Jarak    :* " + String(sensor.jarak, 1) + " cm\n";
+  } else {
+    pesan += "📏 *Jarak    :* Sensor Error\n";
+  }
+
+  pesan += "🌧 *Hujan    :* " + String(sensor.persenHujan) + "%\n";
+  pesan += "📅 *Tanggal  :* " + tanggal + "\n";
+  pesan += "🕐 *Waktu    :* " + jam + "\n";
+  pesan += "📡 *WiFi     :* " + String(sistem.wifiTerhubung ? "Terhubung ✅" : "Terputus ❌") + "\n";
+  pesan += "━━━━━━━━━━━━━━━━━━";
+  return pesan;
+}
+
+void kirimTelegramJikaPerlu() {
+  if (!sistem.wifiTerhubung) return;
+
+  bool statusBerubah = (sensor.status != sistem.statusTerakhirTerkirim);
+  bool kondisiBahaya = (sensor.status == StatusBanjir::BAHAYA ||
+                        sensor.status == StatusBanjir::SENSOR_ERROR);
+  bool intervalTercapai = (millis() - tTelegram >= Config::INTERVAL_TELEGRAM);
+
+  if (kondisiBahaya && (statusBerubah || intervalTercapai)) {
+
+    Serial.println("[Telegram] Mengirim notifikasi...");
+    String pesan = buatPesanTelegram();
+
+    if (bot.sendMessage(Config::CHAT_ID, pesan, "Markdown")) {
+      Serial.println("[Telegram] Pesan terkirim ✓");
+      sistem.statusTerakhirTerkirim = sensor.status;
+      tTelegram = millis();
+    } else {
+      Serial.println("[Telegram] GAGAL mengirim! Cek token/chat_id/koneksi.");
+    }
+  }
+
+  if (sensor.status == StatusBanjir::AMAN &&
+
+      sistem.statusTerakhirTerkirim != StatusBanjir::AMAN &&
+      sistem.statusTerakhirTerkirim != StatusBanjir::SENSOR_ERROR) {
+    Serial.println("[Telegram] Mengirim notifikasi AMAN...");
+    String pesan = buatPesanTelegram();
+    pesan += "\n\n✅ Kondisi telah kembali AMAN.";
+    if (bot.sendMessage(Config::CHAT_ID, pesan, "Markdown")) {
+      Serial.println("[Telegram] Notifikasi AMAN terkirim ✓");
+      sistem.statusTerakhirTerkirim = sensor.status;
+      tTelegram = millis();
+    }
+  }
+}
+
+
+void logSerial() {
+  char buf[120];
+
+  Serial.print("[SENSOR] Jarak: ");
+  if (sensor.jarak >= 0) {
+    snprintf(buf, sizeof(buf), "%5.1f cm", sensor.jarak);
+  } else {
+    snprintf(buf, sizeof(buf), "ERROR     ");
+  }
+  Serial.print(buf);
+
+  snprintf(buf, sizeof(buf), " | Hujan: %3d%%", sensor.persenHujan);
+  Serial.print(buf);
+
+  Serial.print(" | Status: ");
+  Serial.print(statusKeEmoji(sensor.status));
+  Serial.print(" ");
+  Serial.print(statusKeString(sensor.status));
+
+  if (sistem.rtcOK) {
+    DateTime now = rtc.now();
+    snprintf(buf, sizeof(buf), " | Jam: %02d:%02d:%02d",
+             now.hour(), now.minute(), now.second());
+    Serial.print(buf);
+  } else {
+    Serial.print(" | Jam: RTC Error");
+  }
+
+  Serial.print(" | WiFi: ");
+  Serial.print(sistem.wifiTerhubung ? "OK" : "PUTUS");
+
+  Serial.println();
+}
+
+
+void tesDiagnostik() {
+  Serial.println("\n========== TES DIAGNOSTIK ==========");
+
+  Serial.print("  LED    : ");
+
+  setLED(true, false, false); delay(300);
+  setLED(false, true, false); delay(300);
+  setLED(false, false, true); delay(300);
+  setLED(false, false, false);
+  Serial.println("OK");
+
+  Serial.print("  BUZZER : ");
+
+  digitalWrite(Pin::BUZZER, HIGH); delay(200);
+  digitalWrite(Pin::BUZZER, LOW);
+  Serial.println("OK");
+
+  Serial.print("  RTC    : ");
+
+  Wire.begin(21, 22);
+
+  if (!rtc.begin()) {
+    Serial.println("TIDAK TERDETEKSI! ← Periksa wiring SDA/SCL dan baterai CR2032.");
+    sistem.rtcOK = false;
+  } else {
+    sistem.rtcOK = true;
+    if (!rtc.isrunning()) {
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+      Serial.println("OK (waktu disetel otomatis dari kompilasi)");
+
+    } else {
+      DateTime now = rtc.now();
+      char buf[30];
+      snprintf(buf, sizeof(buf), "OK  [%04d/%02d/%02d %02d:%02d:%02d]",
+               now.year(), now.month(), now.day(),
+               now.hour(), now.minute(), now.second());
+      Serial.println(buf);
+    }
+  }
+
+  Serial.print("  WIFI   : ");
+
+  sistem.wifiTerhubung = hubungkanWifi();
+  if (sistem.wifiTerhubung) {
+    Serial.println("OK");
+  } else {
+    Serial.println("GAGAL ← Mode offline, Telegram tidak aktif.");
+  }
+
+  if (sistem.wifiTerhubung) {
+
+    Serial.print("  BOT    : ");
+    clientSecure.setInsecure();
+
+    User me = bot.getMe();
+
+    if (me.id != 0) {
+      Serial.print("OK  [@");
+      Serial.print(me.username);
+      Serial.println("]");
+    } else {
+      Serial.println("GAGAL ← Periksa BOT_TOKEN atau koneksi internet.");
+    }
+  }
+
+  Serial.print("  ULTRAS : ");
+
+  float jarakTest = bacaJarak();
+  if (jarakTest >= 0) {
+    Serial.printf("OK  [%.1f cm]\n", jarakTest);
+  } else {
+    Serial.println("ERROR ← Periksa wiring TRIG/ECHO.");
+  }
+
+  Serial.println("=====================================\n");
+}
+
+
 void setup() {
   Serial.begin(115200);
   delay(500);
 
-  // Pin mode
-  pinMode(TRIG_PIN,    OUTPUT);
-  pinMode(ECHO_PIN,    INPUT);
-  pinMode(RAIN_DO_PIN, INPUT);
-  pinMode(LED_GREEN,   OUTPUT);
-  pinMode(LED_YELLOW,  OUTPUT);
-  pinMode(LED_RED,     OUTPUT);
-  pinMode(BUZZER_PIN,  OUTPUT);
+  pinMode(Pin::TRIG,       OUTPUT);
 
-  // Matikan semua output
-  digitalWrite(LED_GREEN,  LOW);
-  digitalWrite(LED_YELLOW, LOW);
-  digitalWrite(LED_RED,    LOW);
-  digitalWrite(BUZZER_PIN, LOW);
+  pinMode(Pin::ECHO,       INPUT);
+  pinMode(Pin::LED_HIJAU,  OUTPUT);
+  pinMode(Pin::LED_KUNING, OUTPUT);
+  pinMode(Pin::LED_MERAH,  OUTPUT);
+  pinMode(Pin::BUZZER,     OUTPUT);
 
-  // SPIFFS
-  if (!SPIFFS.begin(true)) {
-    Serial.println("[SPIFFS] Mount gagal!");
-  } else {
-    Serial.println("[SPIFFS] OK");
-  }
+  digitalWrite(Pin::LED_HIJAU,  LOW);
 
-  // WiFi
-  Serial.printf("[WiFi] Menghubungkan ke %s ", WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  int retry = 0;
-  while (WiFi.status() != WL_CONNECTED && retry < 30) {
-    delay(500);
-    Serial.print(".");
-    retry++;
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[WiFi] Terhubung! IP: " + WiFi.localIP().toString());
-  } else {
-    Serial.println("\n[WiFi] GAGAL terhubung — sistem lanjut tanpa internet");
-  }
+  digitalWrite(Pin::LED_KUNING, LOW);
+  digitalWrite(Pin::LED_MERAH,  LOW);
+  digitalWrite(Pin::BUZZER,     LOW);
 
-  // NTP
-  configTime(TZ_OFFSET_WIB, 0, NTP_SERVER);
-  Serial.println("[NTP] Sinkronisasi waktu...");
-  delay(2000);
+  tesDiagnostik();
 
-  // Notif startup
-  if (WiFi.isConnected()) {
-    sendTelegram("🟢 *FEWS Online*\n"
-                 "Flood Early Warning System aktif.\n"
-                 "Kirim /status untuk cek kondisi terkini.");
-  }
-
-  Serial.println("[FEWS] Sistem siap.");
+  Serial.println("[SISTEM] FEWS Aktif — Monitoring dimulai\n");
 }
 
-// ═══════════════════════════════════════════════════════════
-//  LOOP UTAMA
-// ═══════════════════════════════════════════════════════════
+
 void loop() {
-  unsigned long now = millis();
+  unsigned long sekarang = millis();
 
-  // ── Baca sensor tiap LOOP_INTERVAL ────────────────────
-  if (now - lastLoopTime >= LOOP_INTERVAL) {
-    lastLoopTime = now;
+  if (sekarang - tBacaSensor >= Config::INTERVAL_BACA_SENSOR) {
 
-    waterDistanceCm = readWaterLevel();
-    currentRain     = readRainSensor(rainAnalog);
-    isNightTime     = checkNightTime();
+    tBacaSensor = sekarang;
+    bacaSemuaSensor();
+    updateAktuator();
 
-    previousStatus  = currentStatus;
-    currentStatus   = determineStatus(waterDistanceCm, currentRain);
+    if (sensor.status == StatusBanjir::SENSOR_ERROR) {
 
-    bool statusChanged = (currentStatus != previousStatus);
-
-    // Update output fisik
-    setLED(currentStatus);
-    setBuzzer(currentStatus, isNightTime);
-
-    // Log serial
-    Serial.printf("[SENSOR] Jarak=%.1fcm | Hujan ADC=%d | Malam=%s | Status=%d\n",
-                  waterDistanceCm, rainAnalog, isNightTime ? "Ya" : "Tidak", currentStatus);
-
-    // Notifikasi & log
-    handleNotification(currentStatus, statusChanged, isNightTime);
-    logToSPIFFS(buildStatusMessage());
-  }
-
-  // ── Heartbeat jam-an ──────────────────────────────────
-  if (now - lastHeartbeatTime >= HEARTBEAT_INTERVAL) {
-    lastHeartbeatTime = now;
-    if (WiFi.isConnected() && currentStatus == STATUS_AMAN) {
-      sendTelegram("💓 *Heartbeat FEWS*\n" + buildStatusMessage());
+      bool nyala = (sekarang / 250) % 2;
+      setLED(false, false, nyala);
     }
   }
 
-  // ── Cek perintah Telegram ─────────────────────────────
-  if (WiFi.isConnected()) {
-    handleTelegramCommand();
-  }
-}
+  if (sekarang - tSerialLog >= Config::INTERVAL_SERIAL_LOG) {
 
-// ═══════════════════════════════════════════════════════════
-//  FUNGSI SENSOR
-// ═══════════════════════════════════════════════════════════
-
-/**
- * Membaca jarak ultrasonik HC-SR04 (cm).
- * Makin kecil nilainya → air makin tinggi (makin dekat sensor).
- */
-float readWaterLevel() {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // timeout 30ms
-  if (duration == 0) return 999.0; // sensor error → anggap aman
-
-  float distance = (duration * 0.0343) / 2.0;
-  return distance;
-}
-
-/**
- * Membaca sensor hujan YL-83.
- * Makin rendah nilai ADC → permukaan makin basah → hujan makin deras.
- */
-RainLevel readRainSensor(int &analogVal) {
-  analogVal = analogRead(RAIN_AO_PIN);
-
-  if (analogVal > RAIN_LIGHT_THRESHOLD) return RAIN_TIDAK;
-  if (analogVal > RAIN_MED_THRESHOLD)   return RAIN_RINGAN;
-  if (analogVal > 1000)                 return RAIN_SEDANG;
-  return RAIN_DERAS;
-}
-
-/**
- * Menentukan apakah sekarang malam (22.00–06.00 WIB).
- */
-bool checkNightTime() {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return false; // fallback: anggap siang
-  int hour = timeinfo.tm_hour;
-  return (hour >= 22 || hour < 6);
-}
-
-// ═══════════════════════════════════════════════════════════
-//  LOGIKA ADAPTIF
-// ═══════════════════════════════════════════════════════════
-
-FloodStatus determineStatus(float dist, RainLevel rain) {
-  // DARURAT: air sangat tinggi ATAU ketinggian kritis
-  if (dist < LEVEL_SIAGA1)  return STATUS_DARURAT;
-  // SIAGA 1: air tinggi atau kombinasi waspada + hujan deras
-  if (dist < LEVEL_WASPADA) return STATUS_SIAGA1;
-  if (dist < LEVEL_SAFE && rain == RAIN_DERAS) return STATUS_SIAGA1;
-  // WASPADA
-  if (dist < LEVEL_SAFE || rain >= RAIN_SEDANG) return STATUS_WASPADA;
-  return STATUS_AMAN;
-}
-
-// ═══════════════════════════════════════════════════════════
-//  OUTPUT FISIK
-// ═══════════════════════════════════════════════════════════
-
-void setLED(FloodStatus status) {
-  digitalWrite(LED_GREEN,  status == STATUS_AMAN     ? HIGH : LOW);
-  digitalWrite(LED_YELLOW, status == STATUS_WASPADA  ? HIGH : LOW);
-  digitalWrite(LED_RED,    (status == STATUS_SIAGA1 || status == STATUS_DARURAT) ? HIGH : LOW);
-}
-
-void setBuzzer(FloodStatus status, bool night) {
-  switch (status) {
-    case STATUS_AMAN:
-    case STATUS_WASPADA:
-      digitalWrite(BUZZER_PIN, LOW);
-      break;
-    case STATUS_SIAGA1:
-      // Sirine pendek di siang hari, panjang di malam hari
-      digitalWrite(BUZZER_PIN, HIGH);
-      delay(night ? 1000 : 300);
-      digitalWrite(BUZZER_PIN, LOW);
-      break;
-    case STATUS_DARURAT:
-      // Sirine terus menerus — dikendalikan di loop utama
-      digitalWrite(BUZZER_PIN, HIGH);
-      break;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-//  NOTIFIKASI TELEGRAM
-// ═══════════════════════════════════════════════════════════
-
-void sendTelegram(const String &msg) {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  WiFiClientSecure client;
-  client.setInsecure(); // Skip cert validation (cukup untuk proyek ini)
-
-  HTTPClient http;
-  String url = "https://api.telegram.org/bot" + String(TELEGRAM_TOKEN) +
-               "/sendMessage?chat_id=" + String(TELEGRAM_CHAT_ID) +
-               "&text=" + msg + "&parse_mode=Markdown";
-
-  http.begin(client, url);
-  int code = http.GET();
-  if (code != 200) {
-    Serial.printf("[Telegram] HTTP error: %d\n", code);
-  }
-  http.end();
-}
-
-void handleNotification(FloodStatus status, bool statusChanged, bool night) {
-  unsigned long now = millis();
-
-  // Kirim notif saat status berubah
-  if (statusChanged) {
-    lastNotifTime = now;
-    switch (status) {
-      case STATUS_AMAN:
-        sendTelegram("✅ *Kondisi Aman*\n" + buildStatusMessage());
-        break;
-      case STATUS_WASPADA:
-        sendTelegram(night
-          ? "⚠️ *WASPADA (MALAM)*\nHujan deras / air naik. Tetap pantau!"
-          : "⚠️ *Waspada!* Hujan deras, pantau ketinggian air.");
-        break;
-      case STATUS_SIAGA1:
-        sendTelegram(night
-          ? "🚨 *SIAGA 1 MALAM!* Segera evakuasi!\n" + buildStatusMessage()
-          : "🚨 *SIAGA 1!* Segera amankan barang.\n" + buildStatusMessage());
-        break;
-      case STATUS_DARURAT:
-        sendTelegram("🆘 *DARURAT!* Evakuasi SEGERA!\n" + buildStatusMessage());
-        break;
-    }
-    return;
+    tSerialLog = sekarang;
+    logSerial();
   }
 
-  // Notif berulang untuk kondisi kritis
-  unsigned long interval = (status == STATUS_DARURAT)
-    ? (night ? NOTIF_DARURAT_MALAM : NOTIF_DARURAT_SIANG)
-    : (status == STATUS_SIAGA1 ? NOTIF_SIAGA1_INTERVAL : 0);
+  if (sekarang - tCekWifi >= Config::INTERVAL_CEK_WIFI) {
 
-  if (interval > 0 && (now - lastNotifTime >= interval)) {
-    lastNotifTime = now;
-    sendTelegram((status == STATUS_DARURAT
-      ? "🆘 *[DARURAT - PENGINGAT]*\n"
-      : "🚨 *[SIAGA 1 - PENGINGAT]*\n") + buildStatusMessage());
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-//  LOG SPIFFS
-// ═══════════════════════════════════════════════════════════
-
-void logToSPIFFS(const String &entry) {
-  File f = SPIFFS.open("/log.txt", FILE_APPEND);
-  if (!f) return;
-  f.println(entry);
-  f.close();
-
-  // Rotasi sederhana: hapus jika > 50KB
-  if (SPIFFS.usedBytes() > 50000) {
-    SPIFFS.remove("/log.txt");
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-//  PERINTAH TELEGRAM (/status)
-// ═══════════════════════════════════════════════════════════
-
-/**
- * Polling sederhana untuk perintah /status dari Telegram.
- * Untuk produksi, gunakan webhook + server.
- */
-void handleTelegramCommand() {
-  static long lastUpdateId = 0;
-
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-
-  String url = "https://api.telegram.org/bot" + String(TELEGRAM_TOKEN) +
-               "/getUpdates?offset=" + String(lastUpdateId + 1) + "&timeout=1";
-  http.begin(client, url);
-  http.setTimeout(3000);
-
-  int code = http.GET();
-  if (code == 200) {
-    String payload = http.getString();
-    if (payload.indexOf("/status") >= 0) {
-      sendTelegram("📊 *Status Terkini FEWS*\n" + buildStatusMessage());
-      // Update offset (parsing sederhana)
-      int idIdx = payload.indexOf("\"update_id\":");
-      if (idIdx >= 0) {
-        lastUpdateId = payload.substring(idIdx + 12, idIdx + 22).toInt();
-      }
-    }
-  }
-  http.end();
-}
-
-// ═══════════════════════════════════════════════════════════
-//  HELPER: MEMBANGUN PESAN STATUS
-// ═══════════════════════════════════════════════════════════
-
-String buildStatusMessage() {
-  struct tm timeinfo;
-  char timeStr[20] = "N/A";
-  if (getLocalTime(&timeinfo)) {
-    strftime(timeStr, sizeof(timeStr), "%H:%M WIB", &timeinfo);
+    tCekWifi = sekarang;
+    cekKoneksiWifi();
   }
 
-  const char* statusLabel[] = {"🟢 AMAN", "🟡 WASPADA", "🔴 SIAGA 1", "⚫ DARURAT"};
-  const char* rainLabel[]   = {"Tidak Hujan", "Ringan", "Sedang", "Deras"};
-  const char* periodLabel   = isNightTime ? "Malam (22:00–06:00)" : "Siang (06:00–22:00)";
+  kirimTelegramJikaPerlu();
 
-  String msg = "";
-  msg += "📍 Ketinggian air : " + String((int)waterDistanceCm) + " cm dari sensor\n";
-  msg += "🌧️ Intensitas hujan: " + String(rainLabel[currentRain]) + "\n";
-  msg += "🕐 Waktu          : " + String(timeStr) + " (" + periodLabel + ")\n";
-  msg += "📶 Status         : " + String(statusLabel[currentStatus]);
-  return msg;
 }
