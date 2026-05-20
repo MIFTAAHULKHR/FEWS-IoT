@@ -1,66 +1,93 @@
 {
   "version": 1,
-  "author": "Tim FEWS — Teknik Informatika",
+  "author": "Fathimah Abiyyi Khairunnisa",
   "editor": "wokwi",
   "parts": [
-    { "type": "wokwi-esp32-devkit-v1", "id": "esp32", "top": 0, "left": 0, "attrs": {} },
-
-    { "type": "wokwi-hc-sr04", "id": "ultrasonic",
-      "top": -120, "left": 160,
-      "attrs": { "distance": "80" } },
-
-    { "type": "wokwi-resistor", "id": "r1",
-      "top": 80, "left": 280,
-      "attrs": { "value": "220" } },
-    { "type": "wokwi-led", "id": "ledGreen",
-      "top": 80, "left": 350,
-      "attrs": { "color": "green" } },
-
-    { "type": "wokwi-resistor", "id": "r2",
-      "top": 120, "left": 280,
-      "attrs": { "value": "220" } },
-    { "type": "wokwi-led", "id": "ledYellow",
-      "top": 120, "left": 350,
-      "attrs": { "color": "yellow" } },
-
-    { "type": "wokwi-resistor", "id": "r3",
-      "top": 160, "left": 280,
-      "attrs": { "value": "220" } },
-    { "type": "wokwi-led", "id": "ledRed",
-      "top": 160, "left": 350,
-      "attrs": { "color": "red" } },
-
-    { "type": "wokwi-buzzer", "id": "buzzer",
-      "top": 210, "left": 300,
-      "attrs": { "volume": "0.1" } },
-
-    { "type": "wokwi-potentiometer", "id": "pot1",
-      "top": 260, "left": 160,
-      "attrs": { "label": "Simulasi Sensor Hujan (YL-83)" } }
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 14.3, "left": 81.4, "attrs": {} },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": -57.88,
+      "left": -127.86,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led2",
+      "top": 22.87,
+      "left": -128.76,
+      "attrs": { "color": "yellow" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led3",
+      "top": 96.03,
+      "left": -122.19,
+      "attrs": { "color": "limegreen" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": -11.75,
+      "left": -76.62,
+      "attrs": { "value": "1000" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": 62.67,
+      "left": -71.91,
+      "attrs": { "value": "1000" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r3",
+      "top": 134.62,
+      "left": -71.55,
+      "attrs": { "value": "1000" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "bz1",
+      "top": -103.2,
+      "left": 11.4,
+      "attrs": { "volume": "0.1" }
+    },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "ultrasonic1",
+      "top": -104.1,
+      "left": 235.9,
+      "attrs": { "distance": "84" }
+    },
+    { "type": "wokwi-potentiometer", "id": "pot1", "top": -116.5, "left": 105.4, "attrs": {} },
+    { "type": "wokwi-ds1307", "id": "rtc1", "top": 244.2, "left": 86.5, "attrs": {} }
   ],
   "connections": [
-    ["esp32:D12",  "ultrasonic:TRIG", "green",  []],
-    ["esp32:D14",  "ultrasonic:ECHO", "blue",   []],
-    ["esp32:GND",  "ultrasonic:GND",  "black",  []],
-    ["esp32:5V",   "ultrasonic:VCC",  "red",    []],
-
-    ["esp32:D25",  "r1:1",   "orange", []],
-    ["r1:2",       "ledGreen:A", "orange", []],
-    ["ledGreen:C", "esp32:GND", "black", []],
-
-    ["esp32:D26",  "r2:1",   "yellow", []],
-    ["r2:2",       "ledYellow:A", "yellow", []],
-    ["ledYellow:C","esp32:GND", "black", []],
-
-    ["esp32:D33",  "r3:1",   "red",    []],
-    ["r3:2",       "ledRed:A", "red",  []],
-    ["ledRed:C",   "esp32:GND", "black", []],
-
-    ["esp32:D32",  "buzzer:1", "purple", []],
-    ["buzzer:2",   "esp32:GND", "black", []],
-
-    ["pot1:SIG",   "esp32:D34", "cyan",  []],
-    ["pot1:VCC",   "esp32:3V3", "red",   []],
-    ["pot1:GND",   "esp32:GND", "black", []]
-  ]
+    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+    [ "led2:A", "r2:1", "yellow", [ "v0" ] ],
+    [ "led2:C", "led3:C", "black", [ "h-13.12", "v60.2" ] ],
+    [ "led1:A", "r1:1", "red", [ "v0" ] ],
+    [ "led1:C", "led2:C", "black", [ "h-14.02", "v80.75" ] ],
+    [ "led3:A", "r3:1", "limegreen", [ "v0" ] ],
+    [ "led3:C", "esp:GND.2", "black", [ "v0" ] ],
+    [ "r1:2", "esp:D14", "red", [ "h32.01", "v145.28" ] ],
+    [ "r2:2", "esp:D12", "yellow", [ "h14.34", "v81.26" ] ],
+    [ "r3:2", "esp:D13", "limegreen", [ "v0" ] ],
+    [ "bz1:1", "esp:GND.2", "black", [ "v0" ] ],
+    [ "bz1:2", "esp:D26", "green", [ "v0" ] ],
+    [ "ultrasonic1:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "ultrasonic1:ECHO", "esp:D15", "blue", [ "v0" ] ],
+    [ "ultrasonic1:TRIG", "esp:D2", "white", [ "v0" ] ],
+    [ "pot1:GND", "esp:GND.1", "black", [ "v19.2", "h67.2", "v192.1" ] ],
+    [ "pot1:SIG", "esp:D34", "green", [ "v19.2", "h-58" ] ],
+    [ "ultrasonic1:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "pot1:VCC", "esp:3V3", "red", [ "v19.2", "h66.4", "v201.6" ] ],
+    [ "rtc1:5V", "esp:VIN", "red", [ "h-48", "v-96.4" ] ],
+    [ "rtc1:GND", "esp:GND.2", "black", [ "h-67.2", "v-96", "h57.6" ] ],
+    [ "rtc1:SDA", "esp:D21", "gold", [ "h-28.8", "v-48.3", "h172.8", "v-153.2" ] ],
+    [ "rtc1:SCL", "esp:D22", "green", [ "h-57.6", "v-67.4", "h172.8", "v-172.5" ] ]
+  ],
+  "dependencies": {}
 }
