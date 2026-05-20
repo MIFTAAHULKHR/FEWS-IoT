@@ -5,8 +5,15 @@
 >  Notifikasi dikirimkan secara otomatis ke saluran **Telegram**, sehingga petugas atau warga dapat menerima peringatan tanpa harus memantau perangkat secara langsung.
 Proyek ini disimulasikan menggunakan platform **[Wokwi](https://wokwi.com/projects/461632741819653121)**.
 
-**`pict/VirtualDesign.png`**
-**`pict/image.jpeg`**
+### 🖼️ Desain Rangkaian Virtual
+![Desain Rangkaian Virtual FEWS](pict/VirtualDesign.png)
+
+### 📊 Hasil Pengujian Sistem
+![Monitoring Real-Time via Serial Monitor dan Telegram Bot](pict/image.jpeg)
+
+### Demo Pengujian Alat
+![Demonstrasi Pengujian Alat IoT](pict/Demo.png))
+
 ---
 ## ✨ Fitur Utama
 
